@@ -1,0 +1,8 @@
+# 编译产物和部署私有数据不入库。
+**/bin/
+**/obj/
+**/TestResults/
+**/App_Data/
+**/appsettings.*.local.json
+.env
+.vs/

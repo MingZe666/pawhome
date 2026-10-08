@@ -1,0 +1,6 @@
+<Project>
+  <!-- 锁定依赖图，便于本地和 CI 重复还原。 -->
+  <PropertyGroup>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+</Project>
