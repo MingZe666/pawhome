@@ -37,7 +37,7 @@ public sealed class AuthFlowTests
         }
     }
 
-    /// <summary>注册忽略客户端传入的角色，并允许邮箱验证前登录。</summary>
+    /// <summary>注册账号不包含角色且忽略客户端传入的角色，并允许邮箱验证前登录。</summary>
     [Fact]
     public async Task RegistrationCannotGrantRoleAndLoginUsesSecureCookie()
     {
@@ -45,11 +45,11 @@ public sealed class AuthFlowTests
         using var client = app.CreateCookieClient();
         var response = await app.PostAsync(client, "/api/auth/register", new
         {
-            userName = "registrant", email = "registrant@example.test", password = ApiFactory.Password, roles = new[] { Roles.Owner }
+            userName = "registrant", email = "registrant@example.test", password = ApiFactory.Password, roles = new[] { "Owner" }
         });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var registration = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Empty(registration.GetProperty("roles").EnumerateArray());
+        Assert.False(registration.TryGetProperty("roles", out _));
         Assert.False(registration.GetProperty("emailConfirmed").GetBoolean());
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await app.PostAsync(client, "/api/auth/login", new { userName = "registrant", password = "WrongPassword!42" })).StatusCode);
@@ -117,31 +117,25 @@ public sealed class AuthFlowTests
         await app.LoginAsync(client, "recovery", "ChangedPassword!43");
     }
 
-    /// <summary>负责人可停用志愿者，但不可停用自己和其他负责人；旧会话随后失效。</summary>
+    /// <summary>保留账号停用后的安全戳保护，但不提供管理他人账号的 HTTP 入口。</summary>
     [Fact]
-    public async Task StaffCanDisableOnlyVolunteersAndRevokesSession()
+    public async Task DisablingAccountInvalidatesExistingSession()
     {
         await using var app = new ApiFactory();
-        using var managerClient = app.CreateCookieClient();
-        using var volunteerClient = app.CreateCookieClient();
-        var manager = await app.SeedUserAsync("manager", Roles.Manager);
-        var owner = await app.SeedUserAsync("owner", Roles.Owner);
-        var volunteer = await app.SeedUserAsync("volunteer", Roles.Volunteer);
-        await app.LoginAsync(managerClient, "manager");
-        await app.LoginAsync(volunteerClient, "volunteer");
-        Assert.Equal(HttpStatusCode.Forbidden, (await app.PutAsync(managerClient, $"/api/staff/volunteers/{manager.Id}/disable", new { })).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await app.PutAsync(managerClient, $"/api/staff/volunteers/{owner.Id}/disable", new { })).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await app.PostAsync(volunteerClient, "/api/staff/volunteers", new { userName = "forbidden", email = "forbidden@example.test", password = ApiFactory.Password })).StatusCode);
-        Assert.Equal(HttpStatusCode.Created, (await app.PostAsync(managerClient, "/api/staff/volunteers", new { userName = "newvolunteer", email = "newvolunteer@example.test", password = ApiFactory.Password })).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await app.PutAsync(managerClient, $"/api/staff/volunteers/{volunteer.Id}/disable", new { })).StatusCode);
-        var listing = await managerClient.GetAsync("/api/staff/volunteers");
-        Assert.Equal(HttpStatusCode.OK, listing.StatusCode);
-        var volunteers = await listing.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.False(volunteers.EnumerateArray().Single(value => value.GetProperty("id").GetString() == volunteer.Id).GetProperty("isActive").GetBoolean());
-        Assert.Equal(HttpStatusCode.Unauthorized, (await volunteerClient.GetAsync("/api/auth/me")).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await app.PostAsync(volunteerClient, "/api/auth/login", new { userName = "volunteer", password = ApiFactory.Password })).StatusCode);
+        using var client = app.CreateCookieClient();
+        var user = await app.SeedUserAsync("disabled");
+        await app.LoginAsync(client, "disabled");
+        using (var scope = app.Services.CreateScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+            var stored = (await users.FindByIdAsync(user.Id))!;
+            stored.IsActive = false;
+            Assert.True((await users.UpdateAsync(stored)).Succeeded);
+        }
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await app.PostAsync(client, "/api/auth/login",
+            new { userName = "disabled", password = ApiFactory.Password })).StatusCode);
     }
-
     /// <summary>认证和邮件频率限制按环境配置，超限请求不继续发送邮件。</summary>
     [Fact]
     public async Task RateLimitsRejectExcessAuthenticationAndMailRequests()
@@ -170,37 +164,6 @@ public sealed class AuthFlowTests
         var confirmation = await users.GenerateEmailConfirmationTokenAsync(unconfirmed);
         Assert.Equal(HttpStatusCode.BadRequest, (await app.PostAsync(client, "/api/auth/confirm-email", new { userId = unconfirmed.Id, token = confirmation })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await app.PostAsync(client, "/api/auth/reset-password", new { email = user.Email, token = reset, newPassword = "ChangedPassword!43" })).StatusCode);
-    }
-
-    /// <summary>角色撤销时无需等待 Cookie 验证缓存窗口。</summary>
-    [Fact]
-    public async Task RemovingRoleInvalidatesExistingCookieImmediately()
-    {
-        await using var app = new ApiFactory();
-        using var client = app.CreateCookieClient();
-        var user = await app.SeedUserAsync("demoted", Roles.Manager);
-        await app.LoginAsync(client, "demoted");
-        using (var scope = app.Services.CreateScope())
-        {
-            var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
-            Assert.True((await users.RemoveFromRoleAsync((await users.FindByIdAsync(user.Id))!, Roles.Manager)).Succeeded);
-        }
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
-    }
-
-    /// <summary>重复 Owner 初始化直接停止，不更改已有账号或安全戳。</summary>
-    [Fact]
-    public async Task BootstrapStopsWhenOwnerExists()
-    {
-        await using var app = new ApiFactory();
-        using var client = app.CreateCookieClient();
-        var owner = await app.SeedUserAsync("initialowner", Roles.Owner);
-        var result = await BootstrapCommands.RunAsync("bootstrap-owner", app.Services, new ConfigurationBuilder().Build());
-        Assert.NotEqual(0, result); // 非零退出码表示拒绝重复初始化。
-        using var scope = app.Services.CreateScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
-        Assert.Single(await users.GetUsersInRoleAsync(Roles.Owner));
-        Assert.Equal(owner.SecurityStamp, (await users.FindByIdAsync(owner.Id))!.SecurityStamp);
     }
 
     /// <summary>读取私有测试发件箱，不通过 HTTP 暴露令牌。</summary>

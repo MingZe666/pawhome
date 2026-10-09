@@ -71,20 +71,14 @@ public sealed class ApiFactory(IReadOnlyDictionary<string, string?>? overrides =
         return client;
     }
 
-    /// <summary>使用 Identity 真正创建测试账号与角色，而非绕过认证的模拟头。</summary>
-    public async Task<AppUser> SeedUserAsync(string name, string? role = null, bool confirmed = false)
+    /// <summary>使用 Identity 真正创建测试账号，而非绕过认证的模拟头。</summary>
+    public async Task<AppUser> SeedUserAsync(string name, bool confirmed = false)
     {
         using var scope = Services.CreateScope();
         InitializeDatabase(scope.ServiceProvider.GetRequiredService<PawHomeDbContext>());
         var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
         var user = new AppUser { UserName = name, Email = $"{name}@example.test", EmailConfirmed = confirmed };
         Assert.True((await users.CreateAsync(user, Password)).Succeeded);
-        if (role is not null)
-        {
-            var roles = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-            if (!await roles.RoleExistsAsync(role)) Assert.True((await roles.CreateAsync(new(role))).Succeeded);
-            Assert.True((await users.AddToRoleAsync(user, role)).Succeeded);
-        }
         return user;
     }
 

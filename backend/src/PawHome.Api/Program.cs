@@ -1,4 +1,4 @@
-using System.Security.Claims;
+using PawHome.Api.Animals;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
@@ -14,9 +14,9 @@ using PawHome.Api.Configuration;
 using PawHome.Api.Data;
 using PawHome.Api.Storage;
 
-// 安全初始化命令复用相同配置和数据库服务，永不暴露为 HTTP 端点。
+// 数据库迁移命令复用服务配置，账号统一由用户自行注册。
 var command = args.FirstOrDefault();
-var isCommand = command is "migrate" or "bootstrap-owner" or "add-manager";
+var isCommand = command == "migrate";
 var builder = WebApplication.CreateBuilder(isCommand ? args.Skip(1).ToArray() : args);
 builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection("Security"));
 builder.Services.AddOptions<MailOptions>().Bind(builder.Configuration.GetSection("Mail"))
@@ -26,7 +26,7 @@ builder.Services.AddOptions<MailOptions>().Bind(builder.Configuration.GetSection
         "生产环境必须使用 SMTP 并配置 Mail:Host 和 Mail:From。")
     .ValidateOnStart();
 builder.Services.AddScoped<AccountNotifications>();
-builder.Services.AddScoped<StaffInitializer>();
+builder.Services.AddScoped<PublicationQuota>();
 builder.Services.AddOptions<PhotoOptions>().Bind(builder.Configuration.GetSection("Photos"))
     .ValidateDataAnnotations().ValidateOnStart();
 builder.Services.AddSingleton<IPhotoStorage, LocalPhotoStorage>();
@@ -37,14 +37,16 @@ builder.Services.AddDataProtection().SetApplicationName("PawHome");
 builder.Services.AddOptions<KeyManagementOptions>().Configure<IOptions<SecurityOptions>, IWebHostEnvironment, ILoggerFactory>(
     (options, security, environment, logger) => options.XmlRepository = new FileSystemXmlRepository(
         new DirectoryInfo(Path.GetFullPath(security.Value.KeyPath, environment.ContentRootPath)), logger));
-builder.Services.AddIdentity<AppUser, IdentityRole>(options =>
+builder.Services.AddIdentityCore<AppUser>(options =>
 {
     options.User.RequireUniqueEmail = true;
     options.Password.RequiredLength = SecurityDefaults.MinimumPasswordLength;
     options.SignIn.RequireConfirmedEmail = false;
     options.Lockout.MaxFailedAccessAttempts = SecurityDefaults.LockoutAttempts;
     options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(SecurityDefaults.LockoutMinutes);
-}).AddEntityFrameworkStores<PawHomeDbContext>().AddDefaultTokenProviders();
+}).AddEntityFrameworkStores<PawHomeDbContext>().AddSignInManager().AddDefaultTokenProviders();
+// 注册 Identity Cookie 方案，使登录与退出复用框架会话机制。
+builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme).AddIdentityCookies();
 builder.Services.AddOptions<DataProtectionTokenProviderOptions>().Configure<IOptions<SecurityOptions>>(
     (options, security) => options.TokenLifespan = TimeSpan.FromMinutes(security.Value.TokenMinutes));
 // 每个请求验证安全戳，密码重置、停用和权限撤销不等待默认缓存窗口。
@@ -62,10 +64,8 @@ builder.Services.ConfigureApplicationCookie(options =>
     {
         var manager = context.HttpContext.RequestServices.GetRequiredService<UserManager<AppUser>>();
         var user = await manager.GetUserAsync(context.Principal!);
-        var storedRoles = user is null ? [] : await manager.GetRolesAsync(user);
-        var cookieRoles = context.Principal!.FindAll(ClaimTypes.Role).Select(claim => claim.Value);
-        // 角色变化即撤销旧 Cookie，避免以前的授权声明继续生效。
-        if (user is not { IsActive: true } || !storedRoles.Order().SequenceEqual(cookieRoles.Order()))
+        // 停用账号立即撤销会话，不再使用管理员角色授权。
+        if (user is not { IsActive: true })
         {
             context.RejectPrincipal();
             await context.HttpContext.SignOutAsync(IdentityConstants.ApplicationScheme);
@@ -85,11 +85,7 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
     options.Cookie.SameSite = SameSiteMode.Lax;
 });
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy(Roles.ManageAnimals, policy => policy.RequireRole(Roles.Owner, Roles.Manager, Roles.Volunteer));
-    options.AddPolicy(Roles.ManageApplications, policy => policy.RequireRole(Roles.Owner, Roles.Manager));
-});
+builder.Services.AddAuthorization();
 // 内置 MVC 防伪授权筛选器由 Views 服务注册，继续复用框架验证而不手写校验。
 builder.Services.AddControllersWithViews(options => options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()))
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
@@ -122,7 +118,9 @@ builder.Services.AddSingleton<IAccountMailer>(services =>
 var app = builder.Build();
 if (isCommand)
 {
-    Environment.ExitCode = await BootstrapCommands.RunAsync(command!, app.Services, builder.Configuration);
+    using var scope = app.Services.CreateScope();
+    await scope.ServiceProvider.GetRequiredService<PawHomeDbContext>().Database.MigrateAsync();
+    Console.WriteLine("数据库迁移完成。");
     return;
 }
 app.UseExceptionHandler();

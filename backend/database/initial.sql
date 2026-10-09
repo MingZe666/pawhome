@@ -1,4 +1,4 @@
-﻿CREATE TABLE IF NOT EXISTS `__EFMigrationsHistory` (
+CREATE TABLE IF NOT EXISTS `__EFMigrationsHistory` (
     `MigrationId` varchar(150) NOT NULL,
     `ProductVersion` varchar(32) NOT NULL,
     PRIMARY KEY (`MigrationId`)
@@ -154,6 +154,29 @@ CREATE TABLE `SetupMarkers` (
 
 INSERT INTO `__EFMigrationsHistory` (`MigrationId`, `ProductVersion`)
 VALUES ('20261008101333_AtomicOwnerInitialization', '10.0.9');
+
+DROP TABLE `AspNetRoleClaims`;
+
+DROP TABLE `AspNetUserRoles`;
+
+DROP TABLE `SetupMarkers`;
+
+DROP TABLE `AspNetRoles`;
+
+ALTER TABLE `Applications` ADD `WeChat` varchar(64) NULL;
+
+ALTER TABLE `Animals` ADD `PublisherId` varchar(255) NULL;
+
+UPDATE Animals SET IsPublished = FALSE WHERE PublisherId IS NULL;
+
+UPDATE AspNetUsers SET SecurityStamp = UUID();
+
+CREATE INDEX `IX_Animals_PublisherId_IsPublished` ON `Animals` (`PublisherId`, `IsPublished`);
+
+ALTER TABLE `Animals` ADD CONSTRAINT `FK_Animals_AspNetUsers_PublisherId` FOREIGN KEY (`PublisherId`) REFERENCES `AspNetUsers` (`Id`) ON DELETE RESTRICT;
+
+INSERT INTO `__EFMigrationsHistory` (`MigrationId`, `ProductVersion`)
+VALUES ('20261009015853_PeerAdoptionOwnership', '10.0.9');
 
 COMMIT;
 

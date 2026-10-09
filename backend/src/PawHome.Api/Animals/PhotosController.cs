@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,12 +15,13 @@ public sealed class PhotosController(PawHomeDbContext db, IPhotoStorage storage,
     private const int WebPMarkerOffset = 8; // WEBP 标记位于 RIFF 长度之后。
 
     /// <summary>上传 JPEG/PNG/WebP；同时检查大小、声明类型和二进制签名。</summary>
-    [Authorize(Policy = Roles.ManageAnimals)]
-    [HttpPost("/api/staff/animals/{id:long}/photos")]
+    [Authorize]
+    [HttpPost("/api/my/animals/{id:long}/photos")]
     [RequestSizeLimit(PhotoOptions.RequestMaxBytes)]
     public async Task<IActionResult> Upload(long id, IFormFile file, CancellationToken ct)
     {
-        var animal = await db.Animals.FindAsync([id], ct);
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        var animal = await db.Animals.SingleOrDefaultAsync(x => x.Id == id && x.PublisherId == userId, ct);
         if (animal is null) return NotFound();
         if (file.Length <= 0 || file.Length > options.Value.MaxBytes) // 空文件或超出配置上限不能上传。
             return BadRequest(new { message = "照片为空或超过大小限制。" });
@@ -32,7 +34,7 @@ public sealed class PhotosController(PawHomeDbContext db, IPhotoStorage storage,
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         // 不改变字段值的 UPDATE 取得动物行写锁，串行化同一动物的上传计数和插入。
         // 此方式同时支持 MySQL 与 SQLite，避免依赖专有 FOR UPDATE 语法。
-        await db.Animals.Where(x => x.Id == id).ExecuteUpdateAsync(
+        await db.Animals.Where(x => x.Id == id && x.PublisherId == userId).ExecuteUpdateAsync(
             setters => setters.SetProperty(x => x.IsPublished, x => x.IsPublished), ct);
         if (await db.AnimalPhotos.CountAsync(x => x.AnimalId == id, ct) >= MaximumPhotos)
             return Conflict(new { message = "该动物照片数量已达上限。" });
@@ -65,13 +67,13 @@ public sealed class PhotosController(PawHomeDbContext db, IPhotoStorage storage,
         return null;
     }
 
-    /// <summary>未发布动物照片只对动物管理员开放，不通过磁盘路径直接公开。</summary>
+    /// <summary>未发布动物照片只对发布者本人开放，不通过磁盘路径直接公开。</summary>
     [HttpGet("/api/animals/{id:long}/photos/{photoId:long}")]
     public async Task<IActionResult> Read(long id, long photoId, CancellationToken ct)
     {
-        var canManage = User.IsInRole(Roles.Owner) || User.IsInRole(Roles.Manager) || User.IsInRole(Roles.Volunteer);
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         var photo = await db.AnimalPhotos.AsNoTracking()
-            .Where(x => x.Id == photoId && x.AnimalId == id && (x.Animal.IsPublished || canManage))
+            .Where(x => x.Id == photoId && x.AnimalId == id && (x.Animal.IsPublished || (userId != null && x.Animal.PublisherId == userId)))
             .SingleOrDefaultAsync(ct);
         if (photo is null) return NotFound();
         Response.Headers.XContentTypeOptions = "nosniff";
@@ -80,11 +82,12 @@ public sealed class PhotosController(PawHomeDbContext db, IPhotoStorage storage,
     }
 
     /// <summary>删除照片元数据及对应存储对象。</summary>
-    [Authorize(Policy = Roles.ManageAnimals)]
-    [HttpDelete("/api/staff/animals/{id:long}/photos/{photoId:long}")]
+    [Authorize]
+    [HttpDelete("/api/my/animals/{id:long}/photos/{photoId:long}")]
     public async Task<IActionResult> Delete(long id, long photoId, CancellationToken ct)
     {
-        var photo = await db.AnimalPhotos.SingleOrDefaultAsync(x => x.Id == photoId && x.AnimalId == id, ct);
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        var photo = await db.AnimalPhotos.SingleOrDefaultAsync(x => x.Id == photoId && x.AnimalId == id && x.Animal.PublisherId == userId, ct);
         if (photo is null) return NotFound();
         db.AnimalPhotos.Remove(photo);
         await db.SaveChangesAsync(ct);

@@ -1,3 +1,5 @@
+> 历史计划：工作人员角色和初始化方案已被 2026-10-09 的直接对接模式取代，请以 peer-adoption 实施计划及当前 API 文档为准。
+
 # Issue #3 后端实施计划
 
 目标：提交可审核但不合并的 PR，实现独立 ASP.NET Core 10 / Identity Cookie / MySQL 后端。现有 backend 只有说明文档，没有可复用业务实现；账号哈希、验证令牌与会话优先复用 Identity。

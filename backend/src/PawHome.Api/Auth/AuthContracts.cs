@@ -3,7 +3,7 @@ using PawHome.Api.Data;
 
 namespace PawHome.Api.Auth;
 
-/// <summary>注册与后台创建志愿者共用账号输入，密码规则交给 Identity。</summary>
+/// <summary>统一账号注册输入，发布与领养无需分别注册，密码规则交给 Identity。</summary>
 public sealed record RegisterInput(
     [Required, StringLength(FieldLimits.Name)] string UserName,
     [Required] string Password,
@@ -18,4 +18,4 @@ public sealed record ConfirmEmailInput([Required] string UserId, [Required] stri
 public sealed record ResetPasswordInput([Required, EmailAddress] string Email,
     [Required] string Token, [Required] string NewPassword);
 /// <summary>账号响应不包含密码哈希、安全戳或验证令牌。</summary>
-public sealed record UserView(string Id, string UserName, string Email, bool EmailConfirmed, IList<string> Roles);
+public sealed record UserView(string Id, string UserName, string Email, bool EmailConfirmed);

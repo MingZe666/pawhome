@@ -25,7 +25,7 @@ public sealed class AuthController(UserManager<AppUser> users, SignInManager<App
         return Ok(new { token = antiforgery.GetAndStoreTokens(HttpContext).RequestToken });
     }
 
-    /// <summary>注册普通账号，角色只允许后台安全初始化与工作人员管理设置。</summary>
+    /// <summary>注册统一账号，同一账号可发布动物及提交领养申请。</summary>
     [HttpPost("register"), EnableRateLimiting("mail")]
     public async Task<IActionResult> Register(RegisterInput input, CancellationToken cancellationToken)
     {
@@ -33,7 +33,7 @@ public sealed class AuthController(UserManager<AppUser> users, SignInManager<App
         var result = await users.CreateAsync(user, input.Password);
         if (!result.Succeeded) return IdentityFailure(result);
         await notifications.SendConfirmationAsync(user, cancellationToken);
-        return StatusCode(StatusCodes.Status201Created, await ViewAsync(user));
+        return StatusCode(StatusCodes.Status201Created, View(user));
     }
 
     /// <summary>验证有效账号与密码，固定 Cookie 到期时间，不要求邮箱验证后才能登录。</summary>
@@ -50,7 +50,7 @@ public sealed class AuthController(UserManager<AppUser> users, SignInManager<App
             AllowRefresh = false,
             ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(security.Value.SessionMinutes)
         });
-        return Ok(await ViewAsync(user));
+        return Ok(View(user));
     }
 
     /// <summary>撤销当前浏览器会话。</summary>
@@ -61,9 +61,9 @@ public sealed class AuthController(UserManager<AppUser> users, SignInManager<App
         return NoContent();
     }
 
-    /// <summary>返回当前账号与角色，适用于前端恢复登录状态。</summary>
+    /// <summary>返回当前账号资料，适用于前端恢复登录状态。</summary>
     [Authorize, HttpGet("me")]
-    public async Task<IActionResult> Me() => Ok(await ViewAsync((await users.GetUserAsync(User))!));
+    public async Task<IActionResult> Me() => Ok(View((await users.GetUserAsync(User))!));
 
     /// <summary>验证邮箱所有权，Identity 负责令牌用途与有效期。</summary>
     [HttpPost("confirm-email")]
@@ -106,7 +106,7 @@ public sealed class AuthController(UserManager<AppUser> users, SignInManager<App
     }
 
     /// <summary>集中投影账号资料，明确隔离 Identity 内部字段。</summary>
-    private async Task<UserView> ViewAsync(AppUser user) => new(user.Id, user.UserName!, user.Email!, user.EmailConfirmed, await users.GetRolesAsync(user));
+    private static UserView View(AppUser user) => new(user.Id, user.UserName!, user.Email!, user.EmailConfirmed);
     /// <summary>Identity 校验错误使用统一的模型验证响应。</summary>
     private IActionResult IdentityFailure(IdentityResult result)
     {

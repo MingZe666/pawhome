@@ -1,13 +1,11 @@
 namespace PawHome.Api.Data;
-/// <summary>持久化的一次性初始化标记，主键防止多个终端同时创建 Owner。</summary>
-public sealed class SetupMarker
-{
-    public string Id { get; set; } = "";
-}
 /// <summary>动物公开档案，不保存申请联系方式。</summary>
 public sealed class Animal
 {
     public long Id { get; set; }
+    /// <summary>发布账号由服务器设置；旧测试档案迁移后可能没有已核验的归属。</summary>
+    public string? PublisherId { get; set; }
+    public AppUser? Publisher { get; set; }
     public string Name { get; set; } = "";
     public string Species { get; set; } = "";
     public string Sex { get; set; } = "";
@@ -38,6 +36,7 @@ public sealed class AdoptionApplication
     public AppUser Applicant { get; set; } = null!;
     public string Name { get; set; } = "";
     public string Phone { get; set; } = "";
+    public string? WeChat { get; set; }
     public string Residence { get; set; } = "";
     public string PetExperience { get; set; } = "";
     public string Reason { get; set; } = "";
@@ -53,6 +52,7 @@ public static class FieldLimits
     public const int Address = 300; // 居住地字符数上限。
     public const int Description = 2000; // 描述、理由字符数上限。
     public const int Phone = 20; // 电话字符数上限。
+    public const int WeChat = 64; // 微信联系字段字符数上限，兼容用户填写备注式账号。
     public const int StorageKey = 100; // 随机对象键字符数上限。
     public const int PageSize = 20; // 默认每页数量。
     public const int MaxPageSize = 100; // 最大每页数量。

@@ -20,6 +20,14 @@ dotnet ef migrations has-pending-model-changes --project backend/src/PawHome.Api
 
 EF 工具从环境变量 `ConnectionStrings__PawHome` 读取连接。生成 SQL 不需要真实数据库；应用迁移需要真实连接。未来新增模型后生成新迁移，先在数据库副本验证，不能修改已部署迁移中的历史字段长度。
 
+## 直接对接模式的历史升级
+
+PeerAdoptionOwnership 迁移增加 Animals.PublisherId 和 Applications.WeChat，删除工作人员角色表及初始化标记。已有账号及密码哈希保留，所有旧登录和邮件令牌通过更新 SecurityStamp 撤销，需要重新登录并重发邮件。
+
+旧动物无法证明归属：保留档案、照片和申请记录，PublisherId 为空且先下架。不会自动分配给任何账号，也没有公开认领接口。新档案归属固定为当前登录账号。旧申请仍允许原申请人查看；只有核验后实际归属的发布者才能接收对应申请。测试版优先用新账号创建虚构动物；如保留旧数据，需停服备份并人工核验归属，确保每账号上架数量不超过三只，再另行设计受控迁移。
+
+应用前先完整备份数据库和照片，并在副本验证。Down 仅恢复旧表结构，不能还原被删除的角色分配、微信号、归属或旧发布状态；回滚应停止服务并恢复部署前备份及对应代码，不能仅执行向下迁移。
+
 ## MySQL 导出和恢复
 
 使用 MySQL 8.4 客户端，在维护窗口暂停业务写入，并使用专用备份账号。避免把密码写进参数；`-p` 提示输入，自动任务使用权限受限的客户端选项文件或 secret 注入。
@@ -30,7 +38,7 @@ mysql -h TARGET_HOST -u RESTORE_USER -p -e "CREATE DATABASE pawhome CHARACTER SE
 mysql -h TARGET_HOST -u RESTORE_USER -p pawhome
 ```
 
-最后一条在客户端内执行 `SOURCE /absolute/path/pawhome.sql;`（使用实际文件路径）。备份包含申请联系方式、账号哈希等私有数据，放在受限目录且加密保存，不上传 GitHub。恢复后核对账号角色、动物/照片/申请数量、迁移历史和抽样业务请求。建议定期备份并实际做一次恢复演练，保留时间按部署要求设置。
+最后一条在客户端内执行 `SOURCE /absolute/path/pawhome.sql;`（使用实际文件路径）。备份包含申请联系方式、账号哈希等私有数据，放在受限目录且加密保存，不上传 GitHub。恢复后核对账号、动物归属、照片/申请数量、迁移历史和抽样业务请求。建议定期备份并实际做一次恢复演练，保留时间按部署要求设置。
 
 ## 照片及 Data Protection 密钥
 

@@ -4,7 +4,7 @@ using PawHome.Api.Data;
 
 namespace PawHome.Api.Auth;
 
-/// <summary>集中生成邮箱确认令牌，注册、后台创建和终端初始化共用同一邮件流程。</summary>
+/// <summary>集中生成邮箱确认令牌，注册和重新发送共用同一邮件流程。</summary>
 public sealed class AccountNotifications(UserManager<AppUser> users, IAccountMailer mailer)
 {
     /// <summary>发送 Identity 生成的邮箱确认令牌，不记录令牌内容。</summary>

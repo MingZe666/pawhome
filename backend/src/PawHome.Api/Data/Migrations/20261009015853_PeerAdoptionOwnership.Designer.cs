@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PawHome.Api.Data;
 
@@ -9,10 +10,13 @@ using PawHome.Api.Data;
 
 namespace PawHome.Api.Data.Migrations
 {
+    /// <summary>保存直接对接模式迁移的固定模型，供 EF 比较历史结构。</summary>
     [DbContext(typeof(PawHomeDbContext))]
-    partial class PawHomeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261009015853_PeerAdoptionOwnership")]
+    partial class PeerAdoptionOwnership
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <summary>生成固定版本模型；字段长度沿用 Identity 和 FieldLimits 所定义的含义。</summary>
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
