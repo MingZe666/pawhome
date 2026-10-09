@@ -1,0 +1,93 @@
+name: Frontend integration
+on:
+  push:
+    paths: ['frontend/**', 'backend/**', '.github/workflows/frontend.yml']
+  pull_request:
+    paths: ['frontend/**', 'backend/**', '.github/workflows/frontend.yml']
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          # 仅供临时 CI 数据库，禁止部署使用。
+          MYSQL_ROOT_PASSWORD: pawhome_ci_only
+          MYSQL_ROOT_HOST: '%'
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      ASPNETCORE_ENVIRONMENT: Test
+      ConnectionStrings__PawHome: 'Server=127.0.0.1;Port=3306;Database=pawhome_frontend_ci;User ID=root;Password=pawhome_ci_only;SslMode=Required'
+      Mail__Provider: File
+      # 浏览器回归多次注册/邮件操作，测试限流提高；生产配置不修改。
+      Security__AuthPermitLimit: 1000
+      Security__MailPermitLimit: 1000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: npm ci
+        working-directory: frontend
+      - run: npm test && npm run build
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: dotnet restore backend/PawHome.slnx --locked-mode
+      - run: dotnet build backend/PawHome.slnx --no-restore --configuration Release
+      - name: Prepare private test files and localhost TLS
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/pawhome"
+          dotnet dev-certs https --export-path "$RUNNER_TEMP/pawhome/localhost.pfx" --password pawhome_ci_cert_only
+          openssl pkcs12 -in "$RUNNER_TEMP/pawhome/localhost.pfx" -passin pass:pawhome_ci_cert_only -clcerts -nokeys -out "$RUNNER_TEMP/pawhome/localhost.pem"
+          # 临时证书密码不用于线上；私有目录不上传为构建产物。
+          {
+            echo "Mail__OutboxPath=$RUNNER_TEMP/pawhome/outbox"
+            echo "Photos__RootPath=$RUNNER_TEMP/pawhome/photos"
+            echo "Security__KeyPath=$RUNNER_TEMP/pawhome/keys"
+            echo "Kestrel__Certificates__Default__Path=$RUNNER_TEMP/pawhome/localhost.pfx"
+            echo "Kestrel__Certificates__Default__Password=pawhome_ci_cert_only"
+            echo "PAWHOME_DEV_PFX=$RUNNER_TEMP/pawhome/localhost.pfx"
+            echo "PAWHOME_DEV_PFX_PASSWORD=pawhome_ci_cert_only"
+            echo "PAWHOME_DEV_CA=$RUNNER_TEMP/pawhome/localhost.pem"
+            echo "PAWHOME_API_TARGET=https://localhost:7262"
+            echo "PAWHOME_FRONTEND_PORT=5174"
+            echo "PAWHOME_E2E_OUTBOX=$RUNNER_TEMP/pawhome/outbox"
+            echo "PAWHOME_E2E_OUTPUT=$RUNNER_TEMP/pawhome/screenshots"
+          } >> "$GITHUB_ENV"
+      - name: Start isolated API and same-origin frontend
+        shell: bash
+        run: |
+          cd backend/src/PawHome.Api
+          dotnet bin/Release/net10.0/PawHome.Api.dll migrate
+          dotnet bin/Release/net10.0/PawHome.Api.dll --urls https://localhost:7262 > "$RUNNER_TEMP/pawhome/backend.log" 2>&1 &
+          cd ../../../frontend
+          node dev-server.mjs > "$RUNNER_TEMP/pawhome/frontend.log" 2>&1 &
+          # 启动最多等待一分钟；成功后马上继续，不关闭证书校验。
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --cacert "$PAWHOME_DEV_CA" https://localhost:5174/api/animals > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - run: npm run test:integration
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-test-screenshots
+          path: ${{ runner.temp }}/pawhome/screenshots/*.png
+          if-no-files-found: ignore
+          retention-days: 7 # 仅虚构测试截图，保留七天供审核。

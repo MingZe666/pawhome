@@ -1,0 +1,24 @@
+# 示例：前端仅发布 dist，后端使用 HTTPS；替换域名、证书和静态目录。
+server {
+    listen 443 ssl;
+    server_name pawhome.example;
+    ssl_certificate /etc/pawhome/tls/fullchain.pem;
+    ssl_certificate_key /etc/pawhome/tls/privkey.pem;
+    root /srv/pawhome/frontend/dist;
+    index index.html;
+    client_max_body_size 6m; # 五 MiB 照片加 multipart 开销，后端仍校验上传上限。
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy no-referrer always;
+    location / { try_files $uri $uri/ =404; }
+    location /api/ {
+        proxy_pass https://localhost:7261; # 保留完整 /api 路径及多个 Set-Cookie。
+        # 后端证书需匹配 localhost，可信 CA 文件仅含公钥；不得关闭证书验证。
+        proxy_ssl_server_name on;
+        proxy_ssl_name localhost;
+        proxy_ssl_verify on;
+        proxy_ssl_trusted_certificate /etc/pawhome/tls/backend-ca.pem;
+        proxy_set_header Host $host;
+        proxy_no_cache 1;
+        proxy_cache_bypass 1;
+    }
+}

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 示例：复制为 HTTPS 静态站点 dist/web.config，安装 URL Rewrite/ARR 并启用代理。
+     ARR 服务器设置需启用 preserveHostHeader，后端 AllowedHosts 填写此站点域名。
+     后端需监听 HTTPS，证书匹配 localhost 并受 Windows 信任，不得禁用证书校验。 -->
+<configuration>
+  <system.webServer>
+    <rewrite><rules>
+      <rule name="PawHome API" stopProcessing="true">
+        <match url="^api/(.*)$" />
+        <!-- 本机 HTTPS 后端，替换实际地址；保留 API 路径和查询串。 -->
+        <action type="Rewrite" url="https://localhost:7261/api/{R:1}" appendQueryString="true" />
+      </rule>
+    </rules></rewrite>
+    <security><requestFiltering>
+      <!-- 六 MiB 请求上限，为五 MiB 图片加 multipart 开销预留空间。 -->
+      <requestLimits maxAllowedContentLength="6291456" />
+    </requestFiltering></security>
+    <httpProtocol><customHeaders>
+      <add name="X-Content-Type-Options" value="nosniff" />
+      <add name="Referrer-Policy" value="no-referrer" />
+    </customHeaders></httpProtocol>
+  </system.webServer>
+</configuration>
