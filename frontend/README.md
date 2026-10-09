@@ -2,17 +2,17 @@
 
 原生 HTML/CSS/ES 模块，保留 Sites 页面视觉，动物资料改从真实 API 加载。访客浏览；注册用户可发布自己的动物、申请别人的动物，并在账号中心处理收到的申请。联系方式仅本人和对应发布者可读。
 
-## 先确认代码分支
+## 获取最新 main 代码
 
-在仓库根目录检查 `frontend/package.json` 和 `frontend/dev-server.mjs` 是否存在。如果不存在，当前分支尚未包含前端联调代码。可以先切换到已有完整代码的分支：
+前后端与启动说明已统一进入 `main`。在仓库根目录同步代码：
 
 ```powershell
 git fetch origin
-git switch feat/issue-3-backend
+git switch main
 git pull --ff-only
 ```
 
-前端代码进入 `main` 后，在 `main` 上按相同步骤启动即可。
+同步后应能看到 `frontend/package.json` 和 `frontend/dev-server.mjs`，然后按下面的步骤启动。
 
 ## 快速启动前端预览
 
