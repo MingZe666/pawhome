@@ -6,6 +6,25 @@ namespace PawHome.Api.Tests;
 public sealed class MarketplaceTests
 {
     private const int PublishLimit = 3; // 每个账号最多同时上架三只。
+    /// <summary>公开筛选由数据库执行，分页不会漏掉后续页的猫狗档案。</summary>
+    [Fact]
+    public async Task PublicSpeciesFilterPrecedesPagination()
+    {
+        await using var app = new ApiFactory();
+        using var publisher = app.CreateCookieClient();
+        using var guest = app.CreateCookieClient();
+        await app.SeedUserAsync("filterpublisher");
+        await app.LoginAsync(publisher, "filterpublisher");
+        await MarketplaceData.CreateAnimal(app, publisher);
+        Assert.Equal(HttpStatusCode.Created, (await app.PostAsync(publisher, "/api/my/animals", new
+        {
+            name = "测试狗", species = "狗", sex = "公", ageMonths = 6, // 虚构六个月动物。
+            city = "测试市", description = "筛选测试", isPublished = true
+        })).StatusCode);
+        var cats = await guest.GetFromJsonAsync<JsonElement>("/api/animals?species=猫&pageSize=1");
+        Assert.Single(cats.EnumerateArray());
+        Assert.Equal("猫", cats.EnumerateArray().Single().GetProperty("species").GetString());
+    }
     /// <summary>手机号必填而微信号可省略，两者分别按申请合同验证。</summary>
     [Theory]
     [InlineData(MarketplaceData.Phone, null, HttpStatusCode.Created)]

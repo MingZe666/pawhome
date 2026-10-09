@@ -6,3 +6,5 @@
 **/appsettings.*.local.json
 .env
 .vs/
+**/node_modules/
+**/dist/

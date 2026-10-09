@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -10,9 +11,15 @@ public sealed class AnimalsController(PawHomeDbContext db, PublicationQuota quot
 {
     /// <summary>访客只读取已上架动物，公开响应不包含私人联系方式。</summary>
     [HttpGet("/api/animals")]
-    public async Task<ActionResult<List<AnimalView>>> List([FromQuery] PageQuery page, CancellationToken ct)
-        => await db.Animals.AsNoTracking().Where(x => x.IsPublished).OrderByDescending(x => x.Id)
-            .Skip(page.Offset).Take(page.PageSize).Select(AnimalView.Projection).ToListAsync(ct);
+    public async Task<ActionResult<List<AnimalView>>> List([FromQuery] PageQuery page, CancellationToken ct,
+        [FromQuery, StringLength(FieldLimits.ShortText)] string? species = null)
+    {
+        var animals = db.Animals.AsNoTracking().Where(x => x.IsPublished);
+        // 类型条件先于分页，前端切换猫狗时不会只筛选当前页。
+        if (!string.IsNullOrEmpty(species)) animals = animals.Where(x => x.Species == species);
+        return await animals.OrderByDescending(x => x.Id).Skip(page.Offset).Take(page.PageSize)
+            .Select(AnimalView.Projection).ToListAsync(ct);
+    }
 
     /// <summary>未上架档案不公开，统一返回未找到。</summary>
     [HttpGet("/api/animals/{id:long}")]
