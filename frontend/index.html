@@ -8,14 +8,14 @@
   <title>爪爪有家 · 让爱，有个归处</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23174936'/%3E%3Cg fill='%23f7c779'%3E%3Cellipse cx='20' cy='22' rx='6' ry='8'/%3E%3Cellipse cx='34' cy='17' rx='6' ry='8'/%3E%3Cellipse cx='47' cy='25' rx='6' ry='8'/%3E%3Cpath d='M16 44c0-10 12-19 18-19s18 11 18 20c0 12-12 6-18 6s-18 5-18-7Z'/%3E%3C/g%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
-  <script src="app.js" defer></script>
+  <script type="module" src="app.js"></script>
 </head>
 <body>
   <!-- 顶部导航复用页面锚点，移动端保持同一套入口。 -->
   <header class="site-header">
     <a class="brand" href="#home" aria-label="爪爪有家首页"><span class="brand-mark" aria-hidden="true">🐾</span><span>爪爪有家<small>PAWS & HOME</small></span></a>
     <nav aria-label="主导航"><a class="active" href="#home">首页</a><a href="#adopt">遇见伙伴</a><a href="#process">领养指南</a><a href="#help">一起救助</a></nav>
-    <button class="button nav-help" data-dialog="rescue"><span aria-hidden="true">♡</span> 我想帮助</button>
+    <button class="button nav-help" id="account-button" data-action="account">登录 / 注册</button>
   </header>
   <main id="home">
     <!-- 主视觉把领养入口和动物照片放在首屏。 -->
@@ -39,12 +39,25 @@
       <div class="section-heading"><div><p class="eyebrow">MEET YOUR NEW BEST FRIEND</p><h2>有一份爱，正在等你</h2><p class="section-description">不需要完美的你，只需要愿意负责的你。</p></div><span class="section-number">01 / 遇见伙伴</span></div>
       <div class="filter-row"><div class="filters" role="group" aria-label="按动物类型筛选"><button class="filter selected" data-filter="all" aria-pressed="true">全部伙伴</button><button class="filter" data-filter="dog" aria-pressed="false">狗狗</button><button class="filter" data-filter="cat" aria-pressed="false">猫咪</button></div><span id="result-count" class="result-count" aria-live="polite"></span></div>
       <div id="animal-grid" class="animal-grid"></div>
-      <p class="sample-note">动物档案为示例；实际领养状态和健康信息请以救助方核实为准。</p>
+      <div id="public-pager"></div>
+      <p class="sample-note">档案由求助人发布。申请前请充分沟通，核实健康信息与领养安排。</p>
     </section>
     <section id="process" class="process-section">
       <div class="section-shell process-layout"><div class="process-intro"><p class="eyebrow">A LITTLE PREPARATION, A LIFETIME OF LOVE</p><h2>把它带回家之前，<br>先把爱准备好。</h2><p>领养是认真做出的承诺。<br>慢一点了解，才能走得更长久。</p><button class="button primary" data-dialog="checklist">查看领养准备清单</button></div><ol class="steps"><li><span class="step-number">01</span><div><h3>了解彼此</h3><p>了解性格、日常习惯和健康情况，选择适合你生活方式的伙伴。</p></div></li><li><span class="step-number">02</span><div><h3>认真沟通</h3><p>与家人达成共识，向救助方说明居住条件、陪伴时间和照护安排。</p></div></li><li><span class="step-number">03</span><div><h3>见面与确认</h3><p>预约见面，确认档案与领养要求，在充分了解后签署领养约定。</p></div></li><li><span class="step-number">04</span><div><h3>开启共同生活</h3><p>准备安全的家，耐心陪伴适应，并与救助方保持沟通。</p></div></li></ol></div>
     </section>
     <section id="help" class="help section-shell"><div class="section-heading"><div><p class="eyebrow">SMALL ACTIONS, BIG DIFFERENCE</p><h2>暂时不能领养，也能给予温暖</h2></div><span class="section-number">02 / 一起救助</span></div><div class="help-grid"><article class="help-card help-rescue"><span class="help-icon" aria-hidden="true">♡</span><h3>遇到需要帮助的它</h3><p>先观察、记录位置，再联系附近的救助组织。让善意更有方法。</p><button class="text-link" data-dialog="rescue">查看救助指南 <span aria-hidden="true">＋</span></button></article><article class="help-card help-volunteer"><span class="help-icon" aria-hidden="true">✦</span><h3>把一点时间留给它</h3><p>陪伴、接送、拍照或临时寄养。用你的所长，参与力所能及的帮助。</p><button class="text-link" data-dialog="volunteer">了解志愿服务 <span aria-hidden="true">＋</span></button></article><article class="help-card help-share"><span class="help-icon" aria-hidden="true">⌘</span><h3>让更多人看见它</h3><p>分享领养理念和救助方式，也许下一位看到的人，就是它的家人。</p><button class="text-link" id="share-button">分享这份温暖 <span aria-hidden="true">＋</span></button></article></div></section>
+    <!-- 同一账号的发布和申请入口共用账户中心，私人内容在退出后清空。 -->
+    <section id="account" class="account-section section-shell" hidden>
+      <div class="section-heading"><div><p class="eyebrow">A LITTLE KINDNESS, A NEW HOME</p><h2>我的账号</h2></div></div>
+      <div id="account-guest" class="state-message"><p>登录后可发布求助动物、申请领养和查看收到的申请。</p><button class="button primary" data-action="account">登录 / 注册</button></div>
+      <div id="account-workspace" hidden>
+        <div id="account-profile" class="account-profile"></div>
+        <div class="workspace-heading"><h3>我的动物</h3><button class="button primary" data-action="animal-new">发布求助动物</button></div>
+        <div id="my-animals"></div>
+        <div class="workspace-heading"><h3>我的领养申请</h3><button class="button" data-action="applications-reload">刷新申请</button></div>
+        <div id="my-applications"></div>
+      </div>
+    </section>
     <section class="closing section-shell"><div><p class="eyebrow">A HOME CHANGES EVERYTHING</p><h2>它们等待的，<br>是一句「我们回家吧」。</h2></div><a class="button light" href="#adopt">从一次相遇开始 <span aria-hidden="true">♡</span></a><span class="closing-star" aria-hidden="true">✦</span></section>
   </main>
   <footer class="section-shell"><a class="brand" href="#home"><span class="brand-mark" aria-hidden="true">🐾</span><span>爪爪有家<small>PAWS & HOME</small></span></a><p>让每一个生命，都有被温柔对待的机会。</p><button class="text-link" data-dialog="credits">图片致谢</button><span>以领养代替购买 · 不遗弃，不辜负</span></footer>

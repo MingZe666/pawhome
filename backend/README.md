@@ -1,6 +1,6 @@
 # 爪爪有家后端测试版
 
-独立 ASP.NET Core 10 Web API，采用 Identity Cookie、EF Core 10 和 MySQL 官方 EF 提供程序，按 Auth、Animals、Applications、Storage 分模块。前端仍为独立静态演示，接入由 Issue #2 跟踪。
+独立 ASP.NET Core 10 Web API，采用 Identity Cookie、EF Core 10 和 MySQL 官方 EF 提供程序，按 Auth、Animals、Applications、Storage 分模块。前端通过同源 /api 接入，运行与联调详见 [前端说明](../frontend/README.md)。
 
 ## 账号和业务权限
 

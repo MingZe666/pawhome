@@ -1,0 +1,14 @@
+{
+  "name": "pawhome-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node dev-server.mjs",
+    "build": "node package-site.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:integration": "node tests/integration.mjs"
+  },
+  "devDependencies": { "playwright": "1.62.1" },
+  "engines": { "node": ">=22" }
+}
