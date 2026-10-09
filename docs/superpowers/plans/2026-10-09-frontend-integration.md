@@ -14,4 +14,6 @@
 - [x] frontend/dev-server.mjs：静态资源及 /api 同源代理，HTTPS 证书通过环境配置；Node 实际代理测试验证 Cookie、查询及不可穿越目录。
 - [x] frontend/tests/integration.mjs：用真实浏览器、隔离 MySQL、真实 Cookie 和私有测试邮件验证全流程，先确认旧页面没有登录入口。
 - [x] README、部署代理示例及 CI：说明配置和运行，不公开测试发件箱；回归后端，独立代码审查并修复实质问题。
-- [ ] 提交新 PR，以后端分支为基线，更新 Issue #2 并检查 CI；保持未合并。
+- [x] 提交 PR #6，以后端分支为基线，更新 Issue #2；保持未合并。
+
+CI 发现 MySql.Data 同步 TLS 缓存的跨测试并行竞态，补充测试串行设置；业务内部并发断言保留，复核最终 CI 结果后交付审核。

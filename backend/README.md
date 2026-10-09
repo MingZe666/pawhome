@@ -49,6 +49,7 @@ dotnet ef migrations has-pending-model-changes --project backend/src/PawHome.Api
 ```
 
 默认测试用独立 SQLite 数据库、真实 Cookie、私有目录和虚构数据。设置 `PAWHOME_TEST_MYSQL` 后同一套测试使用隔离 MySQL 实例，创建随机数据库并在结束时删除；测试账号需创建/删除测试库权限，不给予生产运行账号。MySQL 通过迁移建库，另有历史数据升级测试。
+测试用例按顺序运行，避免 MySql.Data 同步 TLS 握手共享缓存的并发竞态；单个用例中的上架/照片并发请求仍保留，不跳过断言、不关闭 TLS。生产发布前应跟踪驱动修复并验证并发建连，测试隔离不等同于修复第三方驱动。
 
 覆盖认证、CSRF、邮件恢复、固定会话、账号停用、归属隐私、手机号和微信填写规则、申请处理、照片权限及并发上架/上传限制。旧无归属档案升级后下架且保留，旧会话撤销；详见 [迁移备份说明](docs/migration-backup.md)。
 
